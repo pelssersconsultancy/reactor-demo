@@ -10,6 +10,7 @@ import reactor.test.scheduler.VirtualTimeScheduler;
 import java.time.Duration;
 import java.util.Arrays;
 
+
 import static com.pelssersconsultancy.reactordemo.UserPredicates.hasName;
 
 public class FluxTest {
@@ -58,7 +59,7 @@ public class FluxTest {
 
     @Test
     public void verifyUsersInFlux() {
-        StepVerifier.create(createUsersFlux())
+        StepVerifier.create(createMaleUsers())
                 .expectNextMatches(hasName("Robby"))
                 .expectNextMatches(hasName("Davy"))
                 .expectComplete()
@@ -67,7 +68,7 @@ public class FluxTest {
 
     @Test
     public void upperCaseUserNames() {
-        Flux<User> upperCased = createUsersFlux().map(user -> new User(user.getName().toUpperCase()));
+        Flux<User> upperCased = createMaleUsers().map(user -> new User(user.getName().toUpperCase()));
         StepVerifier.create(upperCased)
                 .expectNextMatches(hasName("ROBBY"))
                 .expectNextMatches(hasName("DAVY"))
@@ -77,7 +78,7 @@ public class FluxTest {
 
     @Test
     public void upperCaseAsync() {
-        Flux<User> upperCased = createUsersFlux().flatMap(this::asyncToUpperCase);
+        Flux<User> upperCased = createMaleUsers().flatMap(this::asyncToUpperCase);
         StepVerifier.create(upperCased)
                 .expectNextMatches(hasName("ROBBY"))
                 .expectNextMatches(hasName("DAVY"))
@@ -113,9 +114,76 @@ public class FluxTest {
     }
 
 
+    @Test
+    public void mergeUserNames() {
+        Flux<String> merged = createMaleUsers().mergeWith(createFemaleUsers()).map(User::getName);
+        StepVerifier.create(merged)
+                .expectNext("Robby", "Davy", "Anita", "Riet")
+                .verifyComplete();
+    }
 
-    private Flux<User> createUsersFlux() {
+    @Test
+    public void mergeTimedFluxesAsIs() {
+        produceStringsEach2Seconds()
+                .mergeWith(produceStringsEach3Seconds())
+                .toStream()
+                .forEach(System.out::println);
+    }
+
+    @Test
+    public void mergeTimedFluxesPreservingMergeOrder() {
+        produceStringsEach2Seconds()
+                .concatWith(produceStringsEach3Seconds())
+                .toStream()
+                .forEach(System.out::println);
+    }
+
+
+    @Test
+    public void requestTest() {
+        int requestCount = 5;
+        StepVerifier.create(integers())         //we setup a flux with 10 numbers
+                .thenRequest(requestCount)      //but our verifier subscriber only requests 5 numbers
+                .expectNextCount(requestCount)  //verify we only are invoked with onNext 5 times
+                .expectComplete()               //verify the flux calls onComplete
+                .verify();                      //start the actual subscription by calling verify
+    }
+
+    @Test
+    public void request2numbersOneByOneAndCancelFluxAfterwards() {
+        StepVerifier.create(integers())
+                .thenRequest(1)
+                .expectNext(1)
+                .thenRequest(1)
+                .expectNext(2)
+                .thenCancel();
+    }
+
+
+    private Flux<Integer> integers() {
+        return Flux.just(1,2,3,4,5,6,7,8,9,10);
+    }
+
+    private Flux<String> produceStringsEach2Seconds() {
+        //should produce [t=2s -> "flux_each_2_seconds_1", t=4s ->  "flux_each_2_seconds_2", t=6s -> "flux_each_2_seconds_3"]
+        return stringsWithXSecondDelays("flux_each_2_seconds_", 2).take(3);
+    }
+
+    private Flux<String> produceStringsEach3Seconds() {
+        //should produce [t=3s -> "flux_each_3_seconds_1", t=6s ->  "flux_each_3_seconds_2", t=9s -> "flux_each_3_seconds_3"]
+        return stringsWithXSecondDelays("flux_each_3_seconds_", 3).take(3);
+    }
+
+    private Flux<String> stringsWithXSecondDelays(String fluxName, int seconds) {
+        return Flux.interval(Duration.ofSeconds(seconds)).map(x -> fluxName +  + x);
+    }
+
+    private Flux<User> createMaleUsers() {
         return Flux.just(new User("Robby"), new User("Davy"));
+    }
+
+    private Flux<User> createFemaleUsers() {
+        return Flux.just(new User("Anita"), new User("Riet"));
     }
 
 
