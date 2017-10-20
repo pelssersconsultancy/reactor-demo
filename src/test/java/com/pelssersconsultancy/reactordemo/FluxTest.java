@@ -159,6 +159,16 @@ public class FluxTest {
                 .thenCancel();
     }
 
+    @Test
+    public void printLifecycleEvents() {
+        integers()
+                .doOnSubscribe(x -> System.out.println("Start of subscription"))
+                .doOnNext(x ->  System.out.println("Received " + x))
+                .doOnComplete(() -> System.out.println("The end folks"))
+                .subscribe();
+
+    }
+
 
     private Flux<Integer> integers() {
         return Flux.just(1,2,3,4,5,6,7,8,9,10);
